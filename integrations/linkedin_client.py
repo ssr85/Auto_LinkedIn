@@ -1,6 +1,6 @@
 """LinkedIn integration for posting content."""
 
-from typing import Dict, Optional
+from typing import Dict, Optional, cast, Any
 import requests
 from utils.logger import log
 from config import settings
@@ -14,6 +14,7 @@ class LinkedInManager:
         self.client_id = settings.linkedin_client_id
         self.client_secret = settings.linkedin_client_secret
         self.access_token = settings.linkedin_access_token
+        self.refresh_token = settings.linkedin_refresh_token
         self.user_id = settings.linkedin_user_id
         self.base_url = "https://api.linkedin.com/v2"
         self.headers = {}
@@ -32,12 +33,50 @@ class LinkedInManager:
         try:
             response = requests.request(method, url, headers=self.headers, **kwargs)
             if response.status_code == 401:
-                log.error("LinkedIn access token expired. Please run 'python get_linkedin_token.py' to generate a new one.")
+                log.info("Access token expired. Attempting to refresh...")
+                if self.refresh_token:
+                    if self._refresh_access_token():
+                        # Retry once with new token
+                        return requests.request(method, url, headers=self.headers, **kwargs)
+                log.error("Could not refresh token - No refresh token available or refresh failed")
             return response
         except Exception as e:
             log.error(f"Request failed: {str(e)}")
             raise
 
+    def _refresh_access_token(self) -> bool:
+        """Refresh the LinkedIn access token."""
+        if not all([self.client_id, self.client_secret, self.refresh_token]):
+            log.warning("Missing credentials to refresh LinkedIn token")
+            return False
+
+        try:
+            url = "https://www.linkedin.com/oauth/v2/accessToken"
+            data = {
+                "grant_type": "refresh_token",
+                "refresh_token": self.refresh_token,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            }
+
+            response = requests.post(url, data=data, timeout=30)
+            if response.status_code == 200:
+                token_data = response.json()
+                self.access_token = token_data.get('access_token')
+                # Optionally update refresh token if a new one is returned
+                if token_data.get('refresh_token'):
+                    self.refresh_token = token_data.get('refresh_token')
+
+                self._set_headers()
+                log.info("\u2713 LinkedIn access token refreshed successfully!")
+                log.info("\u26a0\ufe0f  Note: Please update your .env file with the new access token to avoid refreshing every session.")
+                return True
+            else:
+                log.error(f"Failed to refresh token: {response.text}")
+                return False
+        except Exception as e:
+            log.error(f"Error during token refresh: {str(e)}")
+            return False
 
     def post_content(self, content: str, metadata: Optional[Dict] = None) -> Dict:
         """
@@ -70,7 +109,6 @@ class LinkedInManager:
 
             # Add article link if provided in metadata
             if metadata and metadata.get('article_url'):
-                from typing import cast, Any
                 specific_content = cast(dict[str, Any], post_data["specificContent"])
                 share_content = cast(dict[str, Any], specific_content["com.linkedin.ugc.ShareContent"])
                 share_content["shareMediaCategory"] = "ARTICLE"
@@ -171,49 +209,6 @@ class LinkedInManager:
         except requests.exceptions.RequestException as e:
             log.error(f"LinkedIn token validation failed: {str(e)}")
             return False
-
-    def format_content_with_hashtags(self, content: str, hashtags: list) -> str:
-        """
-        Format content with hashtags.
-
-        Args:
-            content: The main content
-            hashtags: List of hashtags (without #)
-
-        Returns:
-            Formatted content with hashtags
-        """
-        if not hashtags:
-            return content
-
-        hashtag_string = " ".join([f"#{tag}" for tag in hashtags])
-        return f"{content}\n\n{hashtag_string}"
-
-    def preview_post(self, content: str, metadata: Optional[Dict] = None) -> str:
-        """
-        Generate a preview of how the post will look.
-
-        Args:
-            content: The content to post
-            metadata: Optional metadata
-
-        Returns:
-            Formatted preview string
-        """
-        preview = "=" * 60 + "\n"
-        preview += "LINKEDIN POST PREVIEW\n"
-        preview += "=" * 60 + "\n\n"
-        preview += content + "\n\n"
-
-        if metadata:
-            if metadata.get('hashtags'):
-                preview += f"Hashtags: {', '.join(metadata['hashtags'])}\n"
-            if metadata.get('article_url'):
-                preview += f"Article Link: {metadata['article_url']}\n"
-
-        preview += "\n" + "=" * 60
-
-        return preview
 
     def format_content_with_hashtags(self, content: str, hashtags: list) -> str:
         """

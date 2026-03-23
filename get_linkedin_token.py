@@ -6,9 +6,9 @@ This creates a simple server to handle the OAuth callback.
 
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 import sys
-
+import secrets
 from config import settings
 
 # You need to set these from your LinkedIn App
@@ -20,8 +20,9 @@ REDIRECT_URI = "http://localhost:8000/callback"
 AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 
-# Store the authorization code
+# Store the authorization code and state
 auth_code = None
+state_token = secrets.token_hex(16)
 
 
 class OAuthHandler(BaseHTTPRequestHandler):
@@ -34,16 +35,23 @@ class OAuthHandler(BaseHTTPRequestHandler):
         # Parse the URL
         parsed = urlparse(self.path)
         print(f"\n[DEBUG] GET request received: {self.path}")
-        print(f"[DEBUG] Path: {parsed.path}")
 
         if parsed.path == "/callback":
             # Extract the authorization code
             params = parse_qs(parsed.query)
-            print(f"[DEBUG] Query params: {list(params.keys())}")
+            
+            # Check state for security
+            received_state = params.get("state", [None])[0]
+            if received_state != state_token:
+                print(f"[ERROR] State mismatch! Expected {state_token}, got {received_state}")
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Security error: State mismatch")
+                return
 
             if "code" in params:
                 auth_code = params["code"][0]
-                print(f"[DEBUG] Auth code received! (Length: {len(auth_code)})")
+                print(f"✓ Authorization code received!")
 
                 # Send success response
                 self.send_response(200)
@@ -53,8 +61,8 @@ class OAuthHandler(BaseHTTPRequestHandler):
                 html = """
                 <html>
                 <head><title>Success!</title></head>
-                <body>
-                    <h1>Authorization Successful!</h1>
+                <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+                    <h1 style="color: #0077b5;">Authorization Successful!</h1>
                     <p>You can close this window and return to the terminal.</p>
                 </body>
                 </html>
@@ -65,8 +73,7 @@ class OAuthHandler(BaseHTTPRequestHandler):
                 # Handle error
                 error = params["error"][0]
                 error_desc = params.get("error_description", ["Unknown error"])[0]
-                print(f"[DEBUG] OAuth Error: {error}")
-                print(f"[DEBUG] Error Description: {error_desc}")
+                print(f"[ERROR] OAuth Error: {error} - {error_desc}")
 
                 self.send_response(400)
                 self.send_header("Content-type", "text/html")
@@ -75,15 +82,14 @@ class OAuthHandler(BaseHTTPRequestHandler):
                 html = f"""
                 <html>
                 <head><title>Error</title></head>
-                <body>
-                    <h1>Authorization Failed</h1>
+                <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+                    <h1 style="color: #d32f2f;">Authorization Failed</h1>
                     <p><strong>Error:</strong> {error}</p>
                     <p><strong>Description:</strong> {error_desc}</p>
                 </body>
                 </html>
                 """
                 self.wfile.write(html.encode())
-
         else:
             self.send_response(404)
             self.end_headers()
@@ -110,7 +116,8 @@ def get_access_token(auth_code):
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Error getting access token: {response.text}")
+        print(f"✗ Error getting access token: {response.status_code}")
+        print(f"Response: {response.text}")
         return None
 
 
@@ -130,7 +137,7 @@ def get_user_info(access_token):
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Error getting user info: {response.text}")
+        print(f"⚠️  Error getting user info: {response.status_code}")
         return None
 
 
@@ -139,13 +146,22 @@ def main():
     global auth_code
 
     print("\n" + "=" * 60)
-    print("LinkedIn OAuth Token Generator")
+    print("LinkedIn OAuth Token Generator (with Refresh Token support)")
     print("=" * 60 + "\n")
 
-    # Build authorization URL
-    # Use newer OpenID Connect scopes (more likely to be approved by default)
-    scopes = "openid profile w_member_social"
-    auth_url = f"{AUTH_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope={scopes}"
+    if "your_linkedin" in CLIENT_ID or "your_linkedin" in CLIENT_SECRET:
+        print("⚠️  Warning: Placeholders detected in .env. Please provide real credentials.")
+        sys.exit(1)
+
+    # Build authorization URL with proper encoding
+    params = {
+        "response_type": "code",
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "state": state_token,
+        "scope": "openid profile w_member_social offline_access"
+    }
+    auth_url = f"{AUTH_URL}?{urlencode(params)}"
 
     print("Step 1: Opening browser for LinkedIn authorization...")
     print(f"\nIf browser doesn't open, visit this URL:\n{auth_url}\n")
@@ -161,10 +177,15 @@ def main():
 
     # Wait for callback
     print("Waiting for authorization... (this may take a moment)")
-    while auth_code is None:
+    try:
         server.handle_request()
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user")
+        sys.exit(0)
 
-    print("\n✓ Authorization code received!")
+    if auth_code is None:
+        print("✗ No authorization code received.")
+        sys.exit(1)
 
     # Exchange code for token
     print("\nStep 3: Exchanging code for access token...")
@@ -174,12 +195,17 @@ def main():
     if token_data is None:
         print("✗ Failed to get access token")
         sys.exit(1)
-        return  # Keep type checker happy
 
     access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
     expires_in = token_data.get("expires_in", "unknown")
+    refresh_token_expires_in = token_data.get("refresh_token_expires_in", "unknown")
 
     print(f"✓ Access token obtained! (Expires in {expires_in} seconds)")
+    if refresh_token:
+        print(f"✓ Refresh token obtained! (Expires in {refresh_token_expires_in} seconds)")
+    else:
+        print("⚠️  Note: No refresh token returned. Ensure 'offline_access' is enabled in your LinkedIn app products.")
 
     # Get user info
     print("\nStep 4: Getting user information...")
@@ -187,7 +213,6 @@ def main():
     user_info = get_user_info(access_token)
 
     if user_info:
-        # OpenID Connect uses 'sub' instead of 'id'
         user_id = user_info.get("sub") or user_info.get("id")
         print(f"✓ User ID: {user_id}")
     else:
@@ -196,16 +221,15 @@ def main():
 
     # Display results
     print("\n" + "=" * 60)
-    print("SUCCESS! Add these to your .env file:")
+    print("SUCCESS! Update your .env file with these values:")
     print("=" * 60)
     print(f"\nLINKEDIN_ACCESS_TOKEN={access_token}")
+    if refresh_token:
+        print(f"LINKEDIN_REFRESH_TOKEN={refresh_token}")
     print(f"LINKEDIN_USER_ID={user_id}")
     print("\n" + "=" * 60)
 
-    print("\n⚠️  Important Notes:")
-    print("1. This token will expire - check your app for expiration time")
-    print("2. Keep this token secure - don't share it")
-    print("3. If you need a new token, run this script again")
+    print("\n⚠️  Security Reminder: Keep these tokens private.")
     print("\n")
 
 
@@ -216,5 +240,5 @@ if __name__ == "__main__":
         print("\n\nOperation cancelled by user")
         sys.exit(0)
     except Exception as e:
-        print(f"\n✗ Error: {str(e)}")
+        print(f"\n✗ unexpected error: {str(e)}")
         sys.exit(1)

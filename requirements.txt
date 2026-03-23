@@ -1,0 +1,30 @@
+# AI and Agent Framework
+crewai>=0.70.0
+crewai-tools>=0.12.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-anthropic>=0.2.0
+
+# Web Scraping and Research
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+newspaper3k>=0.2.8
+trafilatura>=1.12.0
+
+# API Integrations
+py-trello>=0.19.0
+
+# Scheduling and Task Management
+schedule>=1.2.0
+apscheduler>=3.10.4
+
+# Environment and Configuration
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2024.1
+rich>=13.7.0
+loguru>=0.7.2

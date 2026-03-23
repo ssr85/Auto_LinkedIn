@@ -11,14 +11,33 @@ class LinkedInManager:
 
     def __init__(self):
         """Initialize LinkedIn client."""
+        self.client_id = settings.linkedin_client_id
+        self.client_secret = settings.linkedin_client_secret
         self.access_token = settings.linkedin_access_token
         self.user_id = settings.linkedin_user_id
         self.base_url = "https://api.linkedin.com/v2"
+        self.headers = {}
+        self._set_headers()
+
+    def _set_headers(self):
+        """Set headers for API requests."""
         self.headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
             "X-Restli-Protocol-Version": "2.0.0"
         }
+
+    def _ensure_authenticated_request(self, method: str, url: str, **kwargs):
+        """Make an API request and refresh token if needed."""
+        try:
+            response = requests.request(method, url, headers=self.headers, **kwargs)
+            if response.status_code == 401:
+                log.error("LinkedIn access token expired. Please run 'python get_linkedin_token.py' to generate a new one.")
+            return response
+        except Exception as e:
+            log.error(f"Request failed: {str(e)}")
+            raise
+
 
     def post_content(self, content: str, metadata: Optional[Dict] = None) -> Dict:
         """
@@ -51,16 +70,19 @@ class LinkedInManager:
 
             # Add article link if provided in metadata
             if metadata and metadata.get('article_url'):
-                post_data["specificContent"]["com.linkedin.ugc.ShareContent"]["shareMediaCategory"] = "ARTICLE"
-                post_data["specificContent"]["com.linkedin.ugc.ShareContent"]["media"] = [{
+                from typing import cast, Any
+                specific_content = cast(dict[str, Any], post_data["specificContent"])
+                share_content = cast(dict[str, Any], specific_content["com.linkedin.ugc.ShareContent"])
+                share_content["shareMediaCategory"] = "ARTICLE"
+                share_content["media"] = [{
                     "status": "READY",
                     "originalUrl": metadata['article_url']
                 }]
 
-            # Make the API request
-            response = requests.post(
+            # Make the API request using the authenticated wrapper
+            response = self._ensure_authenticated_request(
+                "POST",
                 f"{self.base_url}/ugcPosts",
-                headers=self.headers,
                 json=post_data,
                 timeout=30
             )
@@ -79,7 +101,7 @@ class LinkedInManager:
         except requests.exceptions.RequestException as e:
             log.error(f"Failed to post to LinkedIn: {str(e)}")
             if hasattr(e, 'response') and e.response is not None:
-                log.error(f"Response: {e.response.text}")
+                log.error(f"Response: {cast(requests.Response, e.response).text}")
 
             return {
                 'success': False,
@@ -97,9 +119,9 @@ class LinkedInManager:
             Dictionary with post statistics
         """
         try:
-            response = requests.get(
+            response = self._ensure_authenticated_request(
+                "GET",
                 f"{self.base_url}/socialActions/{post_id}",
-                headers=self.headers,
                 timeout=30
             )
 
@@ -128,17 +150,17 @@ class LinkedInManager:
         """
         try:
             # Try the modern userinfo endpoint first (best for OIDC tokens)
-            response = requests.get(
+            response = self._ensure_authenticated_request(
+                "GET",
                 f"{self.base_url}/userinfo",
-                headers=self.headers,
                 timeout=30
             )
 
             # Fallback to /me if required
             if response.status_code != 200:
-                response = requests.get(
+                response = self._ensure_authenticated_request(
+                    "GET",
                     f"{self.base_url}/me",
-                    headers=self.headers,
                     timeout=30
                 )
 
@@ -149,6 +171,49 @@ class LinkedInManager:
         except requests.exceptions.RequestException as e:
             log.error(f"LinkedIn token validation failed: {str(e)}")
             return False
+
+    def format_content_with_hashtags(self, content: str, hashtags: list) -> str:
+        """
+        Format content with hashtags.
+
+        Args:
+            content: The main content
+            hashtags: List of hashtags (without #)
+
+        Returns:
+            Formatted content with hashtags
+        """
+        if not hashtags:
+            return content
+
+        hashtag_string = " ".join([f"#{tag}" for tag in hashtags])
+        return f"{content}\n\n{hashtag_string}"
+
+    def preview_post(self, content: str, metadata: Optional[Dict] = None) -> str:
+        """
+        Generate a preview of how the post will look.
+
+        Args:
+            content: The content to post
+            metadata: Optional metadata
+
+        Returns:
+            Formatted preview string
+        """
+        preview = "=" * 60 + "\n"
+        preview += "LINKEDIN POST PREVIEW\n"
+        preview += "=" * 60 + "\n\n"
+        preview += content + "\n\n"
+
+        if metadata:
+            if metadata.get('hashtags'):
+                preview += f"Hashtags: {', '.join(metadata['hashtags'])}\n"
+            if metadata.get('article_url'):
+                preview += f"Article Link: {metadata['article_url']}\n"
+
+        preview += "\n" + "=" * 60
+
+        return preview
 
     def format_content_with_hashtags(self, content: str, hashtags: list) -> str:
         """

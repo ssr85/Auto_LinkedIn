@@ -9,9 +9,11 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import sys
 
+from config import settings
+
 # You need to set these from your LinkedIn App
-CLIENT_ID = input("Enter your LinkedIn App Client ID: ").strip()
-CLIENT_SECRET = input("Enter your LinkedIn App Client Secret: ").strip()
+CLIENT_ID = getattr(settings, 'linkedin_client_id', None) or input("Enter your LinkedIn App Client ID: ").strip()
+CLIENT_SECRET = getattr(settings, 'linkedin_client_secret', None) or input("Enter your LinkedIn App Client Secret: ").strip()
 REDIRECT_URI = "http://localhost:8000/callback"
 
 # OAuth URLs
@@ -31,13 +33,17 @@ class OAuthHandler(BaseHTTPRequestHandler):
 
         # Parse the URL
         parsed = urlparse(self.path)
+        print(f"\n[DEBUG] GET request received: {self.path}")
+        print(f"[DEBUG] Path: {parsed.path}")
 
         if parsed.path == "/callback":
             # Extract the authorization code
             params = parse_qs(parsed.query)
+            print(f"[DEBUG] Query params: {list(params.keys())}")
 
             if "code" in params:
                 auth_code = params["code"][0]
+                print(f"[DEBUG] Auth code received! (Length: {len(auth_code)})")
 
                 # Send success response
                 self.send_response(200)
@@ -59,6 +65,8 @@ class OAuthHandler(BaseHTTPRequestHandler):
                 # Handle error
                 error = params["error"][0]
                 error_desc = params.get("error_description", ["Unknown error"])[0]
+                print(f"[DEBUG] OAuth Error: {error}")
+                print(f"[DEBUG] Error Description: {error_desc}")
 
                 self.send_response(400)
                 self.send_header("Content-type", "text/html")
@@ -163,9 +171,10 @@ def main():
 
     token_data = get_access_token(auth_code)
 
-    if not token_data:
+    if token_data is None:
         print("✗ Failed to get access token")
         sys.exit(1)
+        return  # Keep type checker happy
 
     access_token = token_data.get("access_token")
     expires_in = token_data.get("expires_in", "unknown")
@@ -178,7 +187,8 @@ def main():
     user_info = get_user_info(access_token)
 
     if user_info:
-        user_id = user_info.get("id")
+        # OpenID Connect uses 'sub' instead of 'id'
+        user_id = user_info.get("sub") or user_info.get("id")
         print(f"✓ User ID: {user_id}")
     else:
         print("⚠️  Could not retrieve user ID")
@@ -195,7 +205,7 @@ def main():
     print("\n⚠️  Important Notes:")
     print("1. This token will expire - check your app for expiration time")
     print("2. Keep this token secure - don't share it")
-    print("3. If you need a longer-lived token, implement token refresh")
+    print("3. If you need a new token, run this script again")
     print("\n")
 
 

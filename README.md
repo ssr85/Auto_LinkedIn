@@ -373,6 +373,24 @@ For issues and questions:
 
 ---
 
+## Running the System
+# How to Start Your Automation:
+Run Research:
+bash
+- python main.py research
+
+# Approve Topics: Move cards to "Approved Topics" in Trello.
+Process Drafts:
+bash
+- python main.py process
+
+# Schedule Posts: Set a Due Date on any card in "Approved Content".
+Publish (or Start Scheduler):
+bash
+- python main.py publish   # Manual publish
+# OR 
+- python main.py schedule  # Start the background automation
+
 **Built with ❤️ using CrewAI, OpenAI, and Python**
 
 *Automate your LinkedIn presence while maintaining quality and authenticity*

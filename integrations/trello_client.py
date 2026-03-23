@@ -101,7 +101,7 @@ class TrelloManager:
 """
 
             card = self.content_list.add_card(
-                name=f"📄 Content: {topic[:50]}...",
+                name=f"📄 Content: {topic:.50}...",
                 desc=description
             )
 
@@ -154,7 +154,11 @@ class TrelloManager:
             List of approved content dictionaries
         """
         try:
-            approved_list = self._get_list_by_name("Approved Content")
+            # Use the specific list ID from settings first, fallback to name
+            approved_list = self.client.get_list(settings.trello_content_list_id)
+            if not approved_list:
+                approved_list = self._get_list_by_name("Approved Content")
+            
             if not approved_list:
                 log.warning("'Approved Content' list not found")
                 return []
@@ -170,7 +174,8 @@ class TrelloManager:
                         'id': card.id,
                         'title': card.name.replace('📄 Content: ', ''),
                         'content': content,
-                        'url': card.url
+                        'url': card.url,
+                        'due_date': card.due # ISO timestamp or None
                     })
 
             log.info(f"Found {len(content_items)} approved content items")

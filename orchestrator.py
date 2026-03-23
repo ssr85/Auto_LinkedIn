@@ -157,10 +157,12 @@ class ContentOrchestrator:
 
     def publish_approved_content(self):
         """
-        Publish approved content:
+        Publish approved content with a 60-second grace period:
         1. Get approved content from Trello
-        2. Post to LinkedIn
-        3. Archive Trello cards
+        2. Filter by due date
+        3. Wait 60 seconds (grace period)
+        4. Re-verify the card is still in the approved list
+        5. Post to LinkedIn
         """
         log.info("=" * 70)
         log.info("PUBLISHING APPROVED CONTENT")
@@ -179,7 +181,31 @@ class ContentOrchestrator:
             # Step 2: Post each to LinkedIn
             for content_item in approved_content:
                 try:
-                    log.info(f"Publishing: {content_item['title']}")
+                    # Check if scheduled for future
+                    now = datetime.now() # Naive or local, since we'll use it for the grace period check
+                    due_date = content_item.get('due_date')
+                    if due_date:
+                        # Ensure we compare in the same timezone (Trello uses UTC)
+                        now_tz = datetime.now(due_date.tzinfo) if due_date.tzinfo else datetime.now()
+                        if due_date > now_tz:
+                            log.info(f"Skipping '{content_item['title']}' - scheduled for {due_date.strftime('%Y-%m-%d %H:%M')}")
+                            continue
+
+                    # Grace period (60 seconds)
+                    log.info(f"⏳ Grace Period: Posting '{content_item['title']}' in 60 seconds...")
+                    log.info("   (Move the card out of 'Approved Content' to cancel)")
+                    time.sleep(60)
+
+                    # RE-VERIFY: Check if the card is still in the 'Approved Content' list
+                    # Get fresh list of approved content
+                    current_approved = self.trello.get_approved_content()
+                    is_still_approved = any(item['id'] == content_item['id'] for item in current_approved)
+
+                    if not is_still_approved:
+                        log.info(f"🚫 Posting cancelled for '{content_item['title']}' (card was moved/removed)")
+                        continue
+
+                    log.info(f"🚀 Grace period over. Publishing: {content_item['title']}")
 
                     # Preview before posting
                     preview = self.linkedin.preview_post(

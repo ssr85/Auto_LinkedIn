@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     trello_content_list_id: str
 
     # LinkedIn Configuration
+    linkedin_client_id: Optional[str] = None
+    linkedin_client_secret: Optional[str] = None
     linkedin_access_token: str
     linkedin_user_id: str
 

@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     content_min_length: int = 500
     content_max_length: int = 3000
 
+    # Polling Configuration
+    approval_wait_time_minutes: int = 5
+    approval_retry_count: int = 5
+
 
 # Global settings instance
 settings = Settings()

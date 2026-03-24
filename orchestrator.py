@@ -95,11 +95,14 @@ class ContentOrchestrator:
         log.info("=" * 70)
 
         try:
-            # Step 1: Get approved topics
-            approved_topics = self.trello.get_approved_topics()
+            # Step 1: Get approved topics (with polling)
+            approved_topics = self._wait_for_approval(
+                self.trello.get_approved_topics,
+                "Approved Topics"
+            )
 
             if not approved_topics:
-                log.info("No approved topics found")
+                log.info("No approved topics found after waiting. Skipping to next stage.")
                 return
 
             log.info(f"Found {len(approved_topics)} approved topics")
@@ -169,11 +172,14 @@ class ContentOrchestrator:
         log.info("=" * 70)
 
         try:
-            # Step 1: Get approved content
-            approved_content = self.trello.get_approved_content()
+            # Step 1: Get approved content (with polling)
+            approved_content = self._wait_for_approval(
+                self.trello.get_approved_content,
+                "Approved Content"
+            )
 
             if not approved_content:
-                log.info("No approved content found")
+                log.info("No approved content found after waiting.")
                 return
 
             log.info(f"Found {len(approved_content)} approved content items")
@@ -349,3 +355,34 @@ class ContentOrchestrator:
             log.error("✗ System validation failed. Please check configuration.")
 
         return all_valid
+
+    def _wait_for_approval(self, get_items_func, list_name: str) -> List[Dict]:
+        """
+        Polls Trello for approved items with a wait-and-retry loop.
+        Allows the user to manually move cards while the script is running.
+        """
+        wait_time = settings.approval_wait_time_minutes
+        retries = settings.approval_retry_count
+        
+        log.info(f"🔍 Checking for items in '{list_name}'...")
+        items = get_items_func()
+        
+        if items:
+            return items
+
+        log.info(f"⏳ No items found in '{list_name}'.")
+        log.info(f"   Waiting up to {wait_time} minutes for manual approval...")
+        log.info(f"   (Move cards to '{list_name}' in Trello now to continue)")
+
+        for attempt in range(1, retries + 1):
+            # Countdown timer UI (simple CLI version)
+            for remaining in range(60, 0, -10):
+                log.info(f"   ... Waiting ({attempt}/{retries}): {remaining}s remaining")
+                time.sleep(10)
+            
+            items = get_items_func()
+            if items:
+                log.info(f"✅ Found {len(items)} items in '{list_name}'! Resuming workflow...")
+                return items
+        
+        return []

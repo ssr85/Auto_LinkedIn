@@ -252,12 +252,16 @@ class ContentOrchestrator:
         except Exception as e:
             log.error(f"Failed to publish approved content: {str(e)}")
 
-    def run_full_workflow(self):
+    def run_full_workflow(self, url: Optional[str] = None, industry: Optional[str] = None):
         """
         Run the complete workflow:
         1. Daily research
         2. Process approved topics
         3. Publish approved content
+
+        Args:
+            url: Optional target URL for research
+            industry: Optional industry for research
         """
         log.info("\n" + "=" * 70)
         log.info("STARTING FULL WORKFLOW")
@@ -265,7 +269,7 @@ class ContentOrchestrator:
 
         try:
             # Step 1: Daily research
-            self.run_daily_research()
+            self.run_daily_research(url=url, industry=industry)
             time.sleep(2)
 
             # Step 2: Process approved topics (if any)

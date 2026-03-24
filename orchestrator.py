@@ -142,7 +142,7 @@ class ContentOrchestrator:
                         f"✓ Content generated and sent for approval. Card ID: {content_card_id}"
                     )
 
-                    # Archive the topic card
+                    # Archive the original topic card (Stage 2 is done)
                     self.trello.archive_card(topic['id'])
 
                 except Exception as e:
@@ -227,8 +227,8 @@ class ContentOrchestrator:
                             f"✓ Published to LinkedIn\nPost ID: {result['post_id']}\nPublished at: {datetime.now().isoformat()}"
                         )
 
-                        # Archive the card
-                        self.trello.archive_card(content_item['id'])
+                        # Move the card to List 5 (Content Archive)
+                        self.trello.move_card(content_item['id'], settings.trello_archive_list_id)
 
                     else:
                         log.error(f"Failed to post to LinkedIn: {result.get('error', 'Unknown error')}")
@@ -328,12 +328,17 @@ class ContentOrchestrator:
             log.error(f"LinkedIn validation error: {str(e)}")
             all_valid = False
 
-        # Validate Trello (basic check)
+        # Validate Trello (check all 5 lists)
         try:
-            # Try to get lists
-            self.trello.topics_list
-            self.trello.content_list
-            log.info("✓ Trello integration validated")
+            lists_to_check = [
+                self.trello.topics_list,
+                self.trello.approved_topics_list,
+                self.trello.content_approval_list,
+                self.trello.approved_content_list,
+                self.trello.archive_list
+            ]
+            if all(lists_to_check):
+                log.info("✓ Trello integration validated (All 5 workflow lists found)")
         except Exception as e:
             log.error(f"Trello validation error: {str(e)}")
             all_valid = False

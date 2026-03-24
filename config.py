@@ -16,13 +16,17 @@ class Settings(BaseSettings):
     # API Keys
     openai_api_key: str
     anthropic_api_key: Optional[str] = None
+    serper_api_key: Optional[str] = None
 
     # Trello Configuration
     trello_api_key: str
     trello_token: str
     trello_board_id: str
-    trello_topics_list_id: str
-    trello_content_list_id: str
+    trello_topics_list_id: str      # List 1: Topics
+    trello_approved_topics_id: str   # List 2: Approved Topics
+    trello_content_approval_id: str  # List 3: Content Approval
+    trello_approved_content_id: str  # List 4: Approved Content
+    trello_archive_list_id: str      # List 5: Content Archive
 
     # LinkedIn Configuration
     linkedin_client_id: Optional[str] = None

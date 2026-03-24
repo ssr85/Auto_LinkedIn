@@ -17,7 +17,10 @@ class TrelloManager:
         )
         self.board = self.client.get_board(settings.trello_board_id)
         self.topics_list = self.client.get_list(settings.trello_topics_list_id)
-        self.content_list = self.client.get_list(settings.trello_content_list_id)
+        self.approved_topics_list = self.client.get_list(settings.trello_approved_topics_id)
+        self.content_approval_list = self.client.get_list(settings.trello_content_approval_id)
+        self.approved_content_list = self.client.get_list(settings.trello_approved_content_id)
+        self.archive_list = self.client.get_list(settings.trello_archive_list_id)
 
     def create_topic_card(self, topic: str, outline: str, metadata: Dict) -> str:
         """
@@ -100,7 +103,7 @@ class TrelloManager:
 - Move to "Rejected" to discard
 """
 
-            card = self.content_list.add_card(
+            card = self.content_approval_list.add_card(
                 name=f"📄 Content: {topic:.50}...",
                 desc=description
             )
@@ -117,18 +120,13 @@ class TrelloManager:
 
     def get_approved_topics(self) -> List[Dict]:
         """
-        Get all approved topics from Trello.
+        Get all approved topics from Trello (List 2).
 
         Returns:
             List of approved topic dictionaries
         """
         try:
-            approved_list = self._get_list_by_name("Approved Topics")
-            if not approved_list:
-                log.warning("'Approved Topics' list not found")
-                return []
-
-            approved_cards = approved_list.list_cards()
+            approved_cards = self.approved_topics_list.list_cards()
             topics = []
 
             for card in approved_cards:
@@ -148,22 +146,13 @@ class TrelloManager:
 
     def get_approved_content(self) -> List[Dict]:
         """
-        Get all approved content ready for LinkedIn posting.
+        Get all approved content ready for LinkedIn posting (List 4).
 
         Returns:
             List of approved content dictionaries
         """
         try:
-            # Use the specific list ID from settings first, fallback to name
-            approved_list = self.client.get_list(settings.trello_content_list_id)
-            if not approved_list:
-                approved_list = self._get_list_by_name("Approved Content")
-            
-            if not approved_list:
-                log.warning("'Approved Content' list not found")
-                return []
-
-            approved_cards = approved_list.list_cards()
+            approved_cards = self.approved_content_list.list_cards()
             content_items = []
 
             for card in approved_cards:
@@ -184,6 +173,27 @@ class TrelloManager:
         except Exception as e:
             log.error(f"Failed to get approved content: {str(e)}")
             return []
+
+    def move_card(self, card_id: str, target_list_id: str) -> bool:
+        """
+        Move a card to a specific list.
+
+        Args:
+            card_id: The card ID to move
+            target_list_id: The destination list ID
+
+        Returns:
+            Success status
+        """
+        try:
+            card = self.client.get_card(card_id)
+            card.change_list(target_list_id)
+            log.info(f"Moved card {card_id} to list {target_list_id}")
+            return True
+
+        except Exception as e:
+            log.error(f"Failed to move card {card_id} to list {target_list_id}: {str(e)}")
+            return False
 
     def archive_card(self, card_id: str) -> bool:
         """

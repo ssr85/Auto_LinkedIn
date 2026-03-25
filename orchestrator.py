@@ -188,9 +188,13 @@ class ContentOrchestrator:
             for content_item in approved_content:
                 try:
                     # Check if scheduled for future
-                    now = datetime.now() # Naive or local, since we'll use it for the grace period check
                     due_date = content_item.get('due_date')
                     if due_date:
+                        # Parse string if necessary
+                        if isinstance(due_date, str):
+                            from dateutil import parser
+                            due_date = parser.parse(due_date)
+                        
                         # Ensure we compare in the same timezone (Trello uses UTC)
                         now_tz = datetime.now(due_date.tzinfo) if due_date.tzinfo else datetime.now()
                         if due_date > now_tz:

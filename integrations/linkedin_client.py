@@ -1,21 +1,29 @@
 """LinkedIn integration for posting content."""
 
-from typing import Dict, Optional, cast, Any
+from typing import Dict, Optional, cast, Any, TYPE_CHECKING
 import requests
 from utils.logger import log
-from config import settings
+from config import settings as default_settings
+
+if TYPE_CHECKING:
+    from config import Settings
 
 
 class LinkedInManager:
     """Manages LinkedIn API interactions for content posting."""
 
-    def __init__(self):
-        """Initialize LinkedIn client."""
-        self.client_id = settings.linkedin_client_id
-        self.client_secret = settings.linkedin_client_secret
-        self.access_token = settings.linkedin_access_token
-        self.refresh_token = settings.linkedin_refresh_token
-        self.user_id = settings.linkedin_user_id
+    def __init__(self, settings: Optional["Settings"] = None):
+        """Initialize LinkedIn client.
+
+        Args:
+            settings: Settings instance to use. Defaults to global settings.
+        """
+        _settings = settings or default_settings
+        self.client_id = _settings.linkedin_client_id
+        self.client_secret = _settings.linkedin_client_secret
+        self.access_token = _settings.linkedin_access_token
+        self.refresh_token = _settings.linkedin_refresh_token
+        self.user_id = _settings.linkedin_user_id
         self.base_url = "https://api.linkedin.com/v2"
         self.headers = {}
         self._set_headers()

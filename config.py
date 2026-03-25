@@ -13,6 +13,9 @@ class Settings(BaseSettings):
         case_sensitive=False
     )
 
+    # Client identity (optional — used for multi-client mode)
+    client_name: Optional[str] = None
+
     # API Keys
     openai_api_key: str
     anthropic_api_key: Optional[str] = None
@@ -57,5 +60,18 @@ class Settings(BaseSettings):
     approval_retry_count: int = 5
 
 
-# Global settings instance
+# Global settings instance (single-client / backward-compatible default)
 settings = Settings()
+
+
+def load_client_settings(env_file: str, client_name: str) -> "Settings":
+    """Load settings from a client-specific env file.
+
+    Args:
+        env_file: Path to the client's .env file (e.g. 'clients/acme.env')
+        client_name: Logical name used for logging and log directories
+
+    Returns:
+        A fully-validated Settings instance for that client
+    """
+    return Settings(_env_file=env_file, client_name=client_name)  # type: ignore[call-arg]

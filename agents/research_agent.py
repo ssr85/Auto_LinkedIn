@@ -3,19 +3,27 @@
 from crewai import Agent, Task, Crew
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 from langchain_openai import ChatOpenAI
-from typing import List, Dict
+from typing import List, Dict, Optional, TYPE_CHECKING
 from datetime import datetime
 from utils.logger import log
-from config import settings
+from config import settings as default_settings
+
+if TYPE_CHECKING:
+    from config import Settings
 
 
 class ResearchAgent:
     """Agent responsible for researching topics and creating outlines."""
 
-    def __init__(self):
-        """Initialize the research agent."""
+    def __init__(self, settings: Optional["Settings"] = None):
+        """Initialize the research agent.
+
+        Args:
+            settings: Settings instance to use. Defaults to global settings.
+        """
+        self.settings = settings or default_settings
         self.llm = ChatOpenAI(
-            model=settings.ai_model,
+            model=self.settings.ai_model,
             temperature=0.7
         )
 
@@ -188,7 +196,7 @@ class ResearchAgent:
         except Exception as e:
             log.error(f"Failed to parse research results: {str(e)}")
 
-        return topics[:settings.max_topics_per_research]
+        return topics[:self.settings.max_topics_per_research]
 
     def _extract_keywords(self, text: str) -> List[str]:
         """Extract keywords from text."""

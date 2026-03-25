@@ -9,20 +9,30 @@ from agents.content_agent import ContentAgent
 from integrations.trello_client import TrelloManager
 from integrations.linkedin_client import LinkedInManager
 from utils.logger import log
-from config import settings
+from config import settings as default_settings
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import Settings
 
 
 class ContentOrchestrator:
     """Orchestrates the entire content creation and publishing workflow."""
 
-    def __init__(self):
-        """Initialize the orchestrator with all required components."""
-        log.info("Initializing Content Orchestrator")
+    def __init__(self, settings: Optional["Settings"] = None):
+        """Initialize the orchestrator with all required components.
 
-        self.research_agent = ResearchAgent()
-        self.content_agent = ContentAgent()
-        self.trello = TrelloManager()
-        self.linkedin = LinkedInManager()
+        Args:
+            settings: Settings instance to use. Defaults to global settings.
+        """
+        self.settings = settings or default_settings
+        client_label = f"[{self.settings.client_name}] " if self.settings.client_name else ""
+        log.info(f"{client_label}Initializing Content Orchestrator")
+
+        self.research_agent = ResearchAgent(settings=self.settings)
+        self.content_agent = ContentAgent(settings=self.settings)
+        self.trello = TrelloManager(settings=self.settings)
+        self.linkedin = LinkedInManager(settings=self.settings)
 
     def run_daily_research(self, url: Optional[str] = None, industry: Optional[str] = None):
         """
@@ -31,8 +41,8 @@ class ContentOrchestrator:
         2. Create Trello cards for approval
         """
         # Use provided values or fall back to settings
-        target_url = url or settings.target_url
-        target_industry = industry or settings.target_industry
+        target_url = url or self.settings.target_url
+        target_industry = industry or self.settings.target_industry
 
         log.info("=" * 70)
         log.info("STARTING RESEARCH WORKFLOW")
@@ -46,7 +56,7 @@ class ContentOrchestrator:
             topics = self.research_agent.research_topics(
                 url=target_url,
                 industry=target_industry,
-                num_topics=settings.max_topics_per_research
+                num_topics=self.settings.max_topics_per_research
             )
 
             if not topics:
@@ -238,7 +248,7 @@ class ContentOrchestrator:
                         )
 
                         # Move the card to List 5 (Content Archive)
-                        self.trello.move_card(content_item['id'], settings.trello_archive_list_id)
+                        self.trello.move_card(content_item['id'], self.settings.trello_archive_list_id)
 
                     else:
                         log.error(f"Failed to post to LinkedIn: {result.get('error', 'Unknown error')}")
@@ -365,8 +375,8 @@ class ContentOrchestrator:
         Polls Trello for approved items with a wait-and-retry loop.
         Allows the user to manually move cards while the script is running.
         """
-        wait_time = settings.approval_wait_time_minutes
-        retries = settings.approval_retry_count
+        wait_time = self.settings.approval_wait_time_minutes
+        retries = self.settings.approval_retry_count
         
         log.info(f"🔍 Checking for items in '{list_name}'...")
         items = get_items_func()

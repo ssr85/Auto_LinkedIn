@@ -2,7 +2,16 @@
 """
 Main entry point for the LinkedIn Content Automation System.
 
-This script provides a CLI interface for running different workflows.
+Single-client (original) usage is fully preserved:
+  python main.py research
+  python main.py schedule
+
+Multi-client usage:
+  python main.py research  --client acme_corp
+  python main.py research  --all-clients
+  python main.py schedule  --all-clients
+  python main.py clients   list
+  python main.py clients   validate
 """
 
 import sys
@@ -13,12 +22,18 @@ from rich.table import Table
 
 from orchestrator import ContentOrchestrator
 from scheduler import WorkflowScheduler
+from client_manager import ClientManager
+from multi_client_runner import MultiClientRunner
 from utils.logger import log
 from config import settings
 
 
 console = Console()
 
+
+# ---------------------------------------------------------------------------
+# Banner / config display
+# ---------------------------------------------------------------------------
 
 def print_banner():
     """Print application banner."""
@@ -34,7 +49,7 @@ def print_banner():
 
 
 def print_config():
-    """Print current configuration."""
+    """Print current (default) configuration."""
     table = Table(title="Current Configuration", show_header=True)
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="yellow")
@@ -48,92 +63,99 @@ def print_config():
     console.print(table)
 
 
-def run_research_workflow():
+# ---------------------------------------------------------------------------
+# Single-client workflow helpers
+# ---------------------------------------------------------------------------
+
+def _make_orchestrator(client_name=None) -> ContentOrchestrator:
+    """Return an orchestrator — either default or for a named client."""
+    if client_name:
+        manager = ClientManager()
+        return manager.create_orchestrator(client_name)
+    return ContentOrchestrator()
+
+
+def _make_scheduler(client_name=None) -> WorkflowScheduler:
+    """Return a scheduler — either default or for a named client."""
+    if client_name:
+        manager = ClientManager()
+        return manager.create_scheduler(client_name)
+    return WorkflowScheduler()
+
+
+def run_research_workflow(client_name=None):
     """Run the research workflow."""
     console.print("\n[bold cyan]Starting Research Workflow...[/bold cyan]\n")
 
-    # Interactive input for URL and Industry
-    url = console.input(f"[bold white]Enter Target URL[/bold white] (default: {settings.target_url}): ").strip()
-    industry = console.input(f"[bold white]Enter Target Industry[/bold white] (default: {settings.target_industry}): ").strip()
-
-    # Fall back to defaults if empty
-    url = url if url else settings.target_url
-    industry = industry if industry else settings.target_industry
-
-    orchestrator = ContentOrchestrator()
-    orchestrator.run_daily_research(url=url, industry=industry)
+    orchestrator = _make_orchestrator(client_name)
+    # Only prompt for URL/industry in single-client interactive mode
+    if not client_name:
+        url = console.input(
+            f"[bold white]Enter Target URL[/bold white] (default: {settings.target_url}): "
+        ).strip() or settings.target_url
+        industry = console.input(
+            f"[bold white]Enter Target Industry[/bold white] (default: {settings.target_industry}): "
+        ).strip() or settings.target_industry
+        orchestrator.run_daily_research(url=url, industry=industry)
+    else:
+        orchestrator.run_daily_research()
 
     console.print("\n[bold green]✓ Research workflow completed![/bold green]")
     console.print("Check your Trello board for new topic cards.\n")
 
 
-def run_process_workflow():
+def run_process_workflow(client_name=None):
     """Run the topic processing workflow."""
     console.print("\n[bold cyan]Processing Approved Topics...[/bold cyan]\n")
-
-    orchestrator = ContentOrchestrator()
-    orchestrator.process_approved_topics()
-
+    _make_orchestrator(client_name).process_approved_topics()
     console.print("\n[bold green]✓ Topic processing completed![/bold green]")
     console.print("Check your Trello board for new content cards.\n")
 
 
-def run_publish_workflow():
+def run_publish_workflow(client_name=None):
     """Run the publishing workflow."""
     console.print("\n[bold cyan]Publishing Approved Content...[/bold cyan]\n")
-
-    orchestrator = ContentOrchestrator()
-    orchestrator.publish_approved_content()
-
+    _make_orchestrator(client_name).publish_approved_content()
     console.print("\n[bold green]✓ Publishing workflow completed![/bold green]")
     console.print("Check LinkedIn for your new posts.\n")
 
 
-def run_full_workflow():
+def run_full_workflow(client_name=None):
     """Run the complete workflow."""
     console.print("\n[bold cyan]Running Full Workflow...[/bold cyan]\n")
-
-    orchestrator = ContentOrchestrator()
-    orchestrator.run_full_workflow()
-
+    _make_orchestrator(client_name).run_full_workflow()
     console.print("\n[bold green]✓ Full workflow completed![/bold green]\n")
 
 
-def validate_setup():
+def validate_setup(client_name=None):
     """Validate system setup."""
     console.print("\n[bold cyan]Validating System Setup...[/bold cyan]\n")
-
-    orchestrator = ContentOrchestrator()
+    orchestrator = _make_orchestrator(client_name)
     if orchestrator.validate_setup():
         console.print("\n[bold green]✓ All systems validated successfully![/bold green]\n")
         return True
-    else:
-        console.print("\n[bold red]✗ System validation failed. Please check your configuration.[/bold red]\n")
-        return False
+    console.print("\n[bold red]✗ System validation failed. Please check your configuration.[/bold red]\n")
+    return False
 
 
-def start_scheduler():
-    """Start the automated scheduler."""
+def start_scheduler(client_name=None):
+    """Start the automated scheduler for a single client."""
     console.print("\n[bold cyan]Starting Automated Scheduler...[/bold cyan]\n")
 
-    scheduler = WorkflowScheduler()
+    scheduler = _make_scheduler(client_name)
 
-    # Validate first
     if not scheduler.orchestrator.validate_setup():
         console.print("[bold red]Setup validation failed. Please fix configuration errors.[/bold red]")
         sys.exit(1)
 
-    # Schedule workflows
     scheduler.schedule_daily_research(hour=9, minute=0)
     scheduler.schedule_process_approvals(interval_hours=2)
     scheduler.schedule_publish_content(interval_hours=1)
-
     scheduler.start()
 
     console.print("\n[bold green]✓ Scheduler started successfully![/bold green]")
     console.print("\nScheduled jobs:")
     scheduler.print_schedule()
-
     console.print("\n[yellow]Press Ctrl+C to stop the scheduler[/yellow]\n")
 
     try:
@@ -146,13 +168,51 @@ def start_scheduler():
         console.print("[bold green]Goodbye![/bold green]\n")
 
 
+# ---------------------------------------------------------------------------
+# Multi-client helpers
+# ---------------------------------------------------------------------------
+
+def run_all_clients_workflow(workflow: str):
+    """Run a one-shot workflow for every registered client in parallel."""
+    runner = MultiClientRunner()
+    runner.run_workflow(workflow)
+
+
+def start_all_schedulers():
+    """Start persistent schedulers for every registered client."""
+    runner = MultiClientRunner()
+    runner.run_all_schedulers()
+
+
+# ---------------------------------------------------------------------------
+# clients sub-command
+# ---------------------------------------------------------------------------
+
+def cmd_clients(sub: str):
+    """Handle `clients list` and `clients validate` sub-commands."""
+    manager = ClientManager()
+    if sub == "list":
+        manager.print_client_table()
+    elif sub == "validate":
+        console.print("\n[bold cyan]Validating all registered clients...[/bold cyan]\n")
+        results = manager.validate_all_clients()
+        manager.print_validation_table(results)
+    else:
+        console.print(f"[red]Unknown clients sub-command '{sub}'. Use: list, validate[/red]")
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         description="LinkedIn Content Automation System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
+Single-client examples (uses .env):
   %(prog)s research              Run research workflow
   %(prog)s process               Process approved topics
   %(prog)s publish               Publish approved content
@@ -160,13 +220,48 @@ Examples:
   %(prog)s schedule              Start automated scheduler
   %(prog)s validate              Validate system setup
   %(prog)s config                Show current configuration
+
+Per-client examples (uses clients/<name>.env):
+  %(prog)s research  --client acme_corp
+  %(prog)s schedule  --client acme_corp
+
+All-client parallel examples:
+  %(prog)s research  --all-clients
+  %(prog)s process   --all-clients
+  %(prog)s publish   --all-clients
+  %(prog)s full      --all-clients
+  %(prog)s schedule  --all-clients
+
+Client management:
+  %(prog)s clients list          List all registered clients
+  %(prog)s clients validate      Validate all client configurations
         """
     )
 
     parser.add_argument(
         'command',
-        choices=['research', 'process', 'publish', 'full', 'schedule', 'validate', 'config'],
+        choices=['research', 'process', 'publish', 'full', 'schedule',
+                 'validate', 'config', 'clients'],
         help='Command to execute'
+    )
+
+    parser.add_argument(
+        'subcommand',
+        nargs='?',
+        help="Sub-command for 'clients' (list | validate)"
+    )
+
+    parser.add_argument(
+        '--client',
+        metavar='NAME',
+        default=None,
+        help='Run for a specific client (must exist in clients/<NAME>.env)'
+    )
+
+    parser.add_argument(
+        '--all-clients',
+        action='store_true',
+        help='Run for all registered clients in parallel'
     )
 
     parser.add_argument(
@@ -177,23 +272,48 @@ Examples:
 
     args = parser.parse_args()
 
-    # Print banner
     if not args.no_banner:
         print_banner()
 
-    # Execute command
-    commands = {
-        'research': run_research_workflow,
-        'process': run_process_workflow,
-        'publish': run_publish_workflow,
-        'full': run_full_workflow,
-        'schedule': start_scheduler,
-        'validate': validate_setup,
-        'config': print_config
-    }
+    # Mutual exclusion: --client and --all-clients cannot be combined
+    if args.client and args.all_clients:
+        console.print("[bold red]Error: --client and --all-clients are mutually exclusive.[/bold red]")
+        sys.exit(1)
 
     try:
-        commands[args.command]()
+        # ---- clients sub-command ----------------------------------------
+        if args.command == 'clients':
+            sub = args.subcommand or 'list'
+            cmd_clients(sub)
+            return
+
+        # ---- config (no client targeting) --------------------------------
+        if args.command == 'config':
+            print_config()
+            return
+
+        # ---- all-clients parallel mode -----------------------------------
+        if args.all_clients:
+            if args.command == 'schedule':
+                start_all_schedulers()
+            else:
+                run_all_clients_workflow(args.command)
+            return
+
+        # ---- single-client or default mode -------------------------------
+        client = args.client  # may be None (uses .env default)
+
+        dispatch = {
+            'research': lambda: run_research_workflow(client),
+            'process':  lambda: run_process_workflow(client),
+            'publish':  lambda: run_publish_workflow(client),
+            'full':     lambda: run_full_workflow(client),
+            'schedule': lambda: start_scheduler(client),
+            'validate': lambda: validate_setup(client),
+        }
+
+        dispatch[args.command]()
+
     except KeyboardInterrupt:
         console.print("\n[yellow]Operation cancelled by user[/yellow]")
         sys.exit(0)

@@ -3,21 +3,36 @@
 import schedule
 import time
 from datetime import datetime
+from typing import Optional, TYPE_CHECKING
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from orchestrator import ContentOrchestrator
 from utils.logger import log
-from config import settings
+from config import settings as default_settings
+
+if TYPE_CHECKING:
+    from config import Settings
 
 
 class WorkflowScheduler:
     """Manages scheduled execution of the content workflow."""
 
-    def __init__(self):
-        """Initialize the scheduler."""
-        self.orchestrator = ContentOrchestrator()
-        self.scheduler = BackgroundScheduler()
+    def __init__(self, settings: Optional["Settings"] = None):
+        """Initialize the scheduler.
+
+        Args:
+            settings: Settings instance to use. Defaults to global settings.
+        """
+        self.settings = settings or default_settings
+        client_name = self.settings.client_name or "default"
+        self.orchestrator = ContentOrchestrator(settings=self.settings)
+        self.scheduler = BackgroundScheduler(
+            job_defaults={"misfire_grace_time": 60},
+            # Namespace job IDs per client to avoid collisions when running multiple schedulers
+            timezone="UTC",
+        )
+        self._client_prefix = f"{client_name}__"
 
     def schedule_daily_research(self, hour: int = 9, minute: int = 0):
         """
@@ -32,8 +47,8 @@ class WorkflowScheduler:
         self.scheduler.add_job(
             self.orchestrator.run_daily_research,
             CronTrigger(hour=hour, minute=minute),
-            id='daily_research',
-            name='Daily Research Workflow',
+            id=f'{self._client_prefix}daily_research',
+            name=f'Daily Research Workflow [{self.settings.client_name or "default"}]',
             replace_existing=True
         )
 
@@ -50,8 +65,8 @@ class WorkflowScheduler:
             self.orchestrator.process_approved_topics,
             'interval',
             hours=interval_hours,
-            id='process_approvals',
-            name='Process Approved Topics',
+            id=f'{self._client_prefix}process_approvals',
+            name=f'Process Approved Topics [{self.settings.client_name or "default"}]',
             replace_existing=True
         )
 
@@ -68,8 +83,8 @@ class WorkflowScheduler:
             self.orchestrator.publish_approved_content,
             'interval',
             hours=interval_hours,
-            id='publish_content',
-            name='Publish Approved Content',
+            id=f'{self._client_prefix}publish_content',
+            name=f'Publish Approved Content [{self.settings.client_name or "default"}]',
             replace_existing=True
         )
 
@@ -97,8 +112,8 @@ class WorkflowScheduler:
                 month=parts[3],
                 day_of_week=parts[4]
             ),
-            id='full_workflow',
-            name='Full Content Workflow',
+            id=f'{self._client_prefix}full_workflow',
+            name=f'Full Content Workflow [{self.settings.client_name or "default"}]',
             replace_existing=True
         )
 

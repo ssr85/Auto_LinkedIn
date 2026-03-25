@@ -1,26 +1,34 @@
 """Trello integration for managing topic and content approval workflows."""
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING
 from trello import TrelloClient
-from config import settings
+from config import settings as default_settings
 from utils.logger import log
+
+if TYPE_CHECKING:
+    from config import Settings
 
 
 class TrelloManager:
     """Manages Trello board interactions for approval workflows."""
 
-    def __init__(self):
-        """Initialize Trello client."""
+    def __init__(self, settings: Optional["Settings"] = None):
+        """Initialize Trello client.
+
+        Args:
+            settings: Settings instance to use. Defaults to global settings.
+        """
+        self.settings = settings or default_settings
         self.client = TrelloClient(
-            api_key=settings.trello_api_key,
-            token=settings.trello_token
+            api_key=self.settings.trello_api_key,
+            token=self.settings.trello_token
         )
-        self.board = self.client.get_board(settings.trello_board_id)
-        self.topics_list = self.client.get_list(settings.trello_topics_list_id)
-        self.approved_topics_list = self.client.get_list(settings.trello_approved_topics_id)
-        self.content_approval_list = self.client.get_list(settings.trello_content_approval_id)
-        self.approved_content_list = self.client.get_list(settings.trello_approved_content_id)
-        self.archive_list = self.client.get_list(settings.trello_archive_list_id)
+        self.board = self.client.get_board(self.settings.trello_board_id)
+        self.topics_list = self.client.get_list(self.settings.trello_topics_list_id)
+        self.approved_topics_list = self.client.get_list(self.settings.trello_approved_topics_id)
+        self.content_approval_list = self.client.get_list(self.settings.trello_content_approval_id)
+        self.approved_content_list = self.client.get_list(self.settings.trello_approved_content_id)
+        self.archive_list = self.client.get_list(self.settings.trello_archive_list_id)
 
     def create_topic_card(self, topic: str, outline: str, metadata: Dict) -> str:
         """

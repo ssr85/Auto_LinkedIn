@@ -2,19 +2,27 @@
 
 from crewai import Agent, Task, Crew
 from langchain_openai import ChatOpenAI
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 from datetime import datetime
 from utils.logger import log
-from config import settings
+from config import settings as default_settings
+
+if TYPE_CHECKING:
+    from config import Settings
 
 
 class ContentAgent:
     """Agent responsible for generating LinkedIn content from approved topics."""
 
-    def __init__(self):
-        """Initialize the content generation agent."""
+    def __init__(self, settings: Optional["Settings"] = None):
+        """Initialize the content generation agent.
+
+        Args:
+            settings: Settings instance to use. Defaults to global settings.
+        """
+        self.settings = settings or default_settings
         self.llm = ChatOpenAI(
-            model=settings.ai_model,
+            model=self.settings.ai_model,
             temperature=0.7
         )
 
@@ -62,7 +70,7 @@ class ContentAgent:
                 **Target Industry**: {metadata.get('industry', 'General')}
 
                 **Requirements**:
-                1. Length: {settings.content_min_length}-{settings.content_max_length} characters
+                1. Length: {self.settings.content_min_length}-{self.settings.content_max_length} characters
                 2. Format for LinkedIn:
                    - Start with a hook that grabs attention
                    - Use short paragraphs (2-3 sentences max)

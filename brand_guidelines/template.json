@@ -1,0 +1,13 @@
+{
+  "name": "Default Brand",
+  "palette": {
+    "primary": ["#000000", "#FFFFFF"],
+    "secondary": []
+  },
+  "typography": {
+    "heading": "Inter Bold",
+    "body": "Inter Regular"
+  },
+  "visual_style": "Clean, modern, professional.",
+  "keywords": ["modern", "clean"]
+}

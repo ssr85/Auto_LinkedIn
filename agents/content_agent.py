@@ -6,6 +6,7 @@ from typing import Dict, Optional, TYPE_CHECKING
 from datetime import datetime
 from utils.logger import log
 from config import settings as default_settings
+from utils.transformation import TransformationService
 
 if TYPE_CHECKING:
     from config import Settings
@@ -35,7 +36,7 @@ class ContentAgent:
             platform, including optimal post length, tone, formatting, and engagement tactics.
             Your posts consistently generate high engagement through compelling storytelling,
             actionable insights, and authentic voice.""",
-            llm=self.llm,
+            llm=self.settings.ai_model,
             verbose=True,
             allow_delegation=False
         )
@@ -130,7 +131,10 @@ class ContentAgent:
             )
 
             result = crew.kickoff()
-            content = str(result).strip()
+            raw_content = str(result).strip()
+
+            # Apply professional LinkedIn formatting (OG standard)
+            content = TransformationService.transform_linkedin(raw_content)
 
             # Validate content
             if not self._validate_content(content):
@@ -206,11 +210,11 @@ class ContentAgent:
 
         char_count = len(content)
 
-        if char_count < settings.content_min_length:
+        if char_count < self.settings.content_min_length:
             log.warning(f"Content too short: {char_count} chars")
             return False
 
-        if char_count > settings.content_max_length:
+        if char_count > self.settings.content_max_length:
             log.warning(f"Content too long: {char_count} chars")
             return False
 

@@ -1,0 +1,15 @@
+{
+  "name": "Nugen Clean Energies",
+  "palette": {
+    "primary": ["#FAC400", "#00AF57", "#9B9B9B"],
+    "secondary": ["#F99800", "#196891", "#6FAF0B"]
+  },
+  "typography": {
+    "heading": "Nexa Bold",
+    "body": "Montserrat Regular",
+    "digital": "Montserrat"
+  },
+  "tagline": "SHAPING POSSIBILITIES",
+  "visual_style": "Clean energy, sustainable, professional, modern, airy, emerald green and mellow sunshine yellow accents, realistic yet high-end photographic or clean 3D render style.",
+  "keywords": ["energy", "clean", "sustainability", "growth", "future", "solar", "emerald", "indigo"]
+}

@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, TYPE_CHECKING
 from trello import TrelloClient
 from config import settings as default_settings
 from utils.logger import log
+from integrations.governors.luminol_monitor import api_monitor
 
 if TYPE_CHECKING:
     from config import Settings
@@ -75,10 +76,12 @@ class TrelloManager:
             return card.id
 
         except Exception as e:
+            if "429" in str(e):
+                api_monitor.record_429(source="trello")
             log.error(f"Failed to create topic card: {str(e)}")
             raise
 
-    def create_content_card(self, topic: str, content: str, metadata: Dict) -> str:
+    def create_content_card(self, topic: str, content: str, metadata: Dict, creative_info: Optional[Dict] = None) -> str:
         """
         Create a card for content approval before LinkedIn posting.
 
@@ -86,11 +89,29 @@ class TrelloManager:
             topic: The topic title
             content: The generated content
             metadata: Additional metadata
+            creative_info: Optional dict with image_url and figma_url
 
         Returns:
             Card ID
         """
         try:
+            creative_section = ""
+            if creative_info:
+                creative_section = f"""
+---
+
+---
+
+### Creative Assets
+- **Figma Design**: {creative_info.get('figma_url', 'N/A')}
+- **Raw Image**: {creative_info.get('image_url', 'N/A')}
+- **Plugin Bridge (One-Click Import)**:
+  1. Open the **HTML to Figma** plugin in Figma.
+  2. Start the local asset server: `python3 utils/asset_server.py`.
+  3. Drag the JSON file into the plugin: `{creative_info.get('figma_import_json', 'N/A')}`
+  4. Your creative will appear with all layers and the image auto-fetched from localhost:8080.
+"""
+
             description = f"""## Generated Content
 
 {content}
@@ -102,7 +123,7 @@ class TrelloManager:
 - **Word Count**: {metadata.get('word_count', 0)}
 - **Generated Date**: {metadata.get('generated_date', 'N/A')}
 - **Target Industry**: {metadata.get('industry', 'N/A')}
-
+{creative_section}
 ---
 
 **Instructions**:
@@ -112,7 +133,7 @@ class TrelloManager:
 """
 
             card = self.content_approval_list.add_card(
-                name=f"📄 Content: {topic:.50}...",
+                name=f"📄 Content: {topic[:50]}...",
                 desc=description
             )
 
@@ -123,6 +144,8 @@ class TrelloManager:
             return card.id
 
         except Exception as e:
+            if "429" in str(e):
+                api_monitor.record_429(source="trello")
             log.error(f"Failed to create content card: {str(e)}")
             raise
 
@@ -149,6 +172,8 @@ class TrelloManager:
             return topics
 
         except Exception as e:
+            if "429" in str(e):
+                api_monitor.record_429(source="trello")
             log.error(f"Failed to get approved topics: {str(e)}")
             return []
 
@@ -179,6 +204,8 @@ class TrelloManager:
             return content_items
 
         except Exception as e:
+            if "429" in str(e):
+                api_monitor.record_429(source="trello")
             log.error(f"Failed to get approved content: {str(e)}")
             return []
 

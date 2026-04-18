@@ -1,0 +1,45 @@
+{
+  "layers": [
+    {
+      "type": "RECTANGLE",
+      "name": "Background",
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 1080,
+      "opacity": 1.0,
+      "visible": true,
+      "fills": [
+        {
+          "type": "IMAGE",
+          "scaleMode": "FILL",
+          "image_url": "http://localhost:8080/default/creative_1774430768.png"
+        }
+      ]
+    },
+    {
+      "type": "TEXT",
+      "name": "Headline",
+      "x": 50,
+      "y": 850,
+      "width": 980,
+      "height": 100,
+      "opacity": 1.0,
+      "visible": true,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      ],
+      "characters": "Antigravity AI",
+      "fontSize": 64,
+      "textAlignHorizontal": "LEFT",
+      "textAlignVertical": "TOP"
+    }
+  ]
+}

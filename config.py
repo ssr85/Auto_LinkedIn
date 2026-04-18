@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     # AI Model Configuration
     ai_model: str = "gpt-4-turbo-preview"
 
+    # Image Generation (Hugging Face)
+    huggingface_api_token: Optional[str] = None
+    
+    # Figma Configuration
+    figma_access_token: Optional[str] = None
+    figma_project_id: Optional[str] = None
+    
+    # Brand Configuration
+    brand_guidelines_file: Optional[str] = None  # e.g. "brand_guidelines/nugen.json"
+    generate_creatives: bool = True               # enabled by default
+
     # Logging
     log_level: str = "INFO"
 
@@ -62,6 +73,14 @@ class Settings(BaseSettings):
 
 # Global settings instance (single-client / backward-compatible default)
 settings = Settings()
+
+# Propagate to environment for compatibility with LangChain/OpenAI/CrewAI
+import os
+os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+if settings.serper_api_key:
+    os.environ["SERPER_API_KEY"] = settings.serper_api_key
+if settings.huggingface_api_token:
+    os.environ["HUGGINGFACE_API_TOKEN"] = settings.huggingface_api_token
 
 
 def load_client_settings(env_file: str, client_name: str) -> "Settings":

@@ -3,12 +3,16 @@
 from typing import List, Dict, Optional
 from datetime import datetime
 import time
+import os
 
 from agents.research_agent import ResearchAgent
 from agents.content_agent import ContentAgent
+from agents.creative_agent import CreativeAgent
 from integrations.trello_client import TrelloManager
 from integrations.linkedin_client import LinkedInManager
+from integrations.governors.luminol_monitor import api_monitor, LinkedInBotSuspicionError
 from utils.logger import log
+from utils.telemetry import get_tracer
 from config import settings as default_settings
 from typing import Optional, TYPE_CHECKING
 
@@ -31,8 +35,10 @@ class ContentOrchestrator:
 
         self.research_agent = ResearchAgent(settings=self.settings)
         self.content_agent = ContentAgent(settings=self.settings)
+        self.creative_agent = CreativeAgent(settings=self.settings)
         self.trello = TrelloManager(settings=self.settings)
         self.linkedin = LinkedInManager(settings=self.settings)
+        self.tracer = get_tracer(__name__)
 
     def run_daily_research(self, url: Optional[str] = None, industry: Optional[str] = None):
         """
@@ -48,50 +54,59 @@ class ContentOrchestrator:
         log.info("STARTING RESEARCH WORKFLOW")
         log.info("=" * 70)
 
-        try:
-            # Step 1: Research topics
-            log.info(f"Researching topics for {target_industry} industry")
-            log.info(f"Source URL: {target_url}")
+        with self.tracer.start_as_current_span("run_daily_research") as span:
+            span.set_attribute("industry", target_industry)
+            span.set_attribute("url", target_url)
+            
+            try:
+                # Check for anomaly halt before starting
+                if api_monitor.should_halt():
+                    log.error("🛑 HALT: Anomaly detected in previous runs. Research aborted for safety.")
+                    return
 
-            topics = self.research_agent.research_topics(
-                url=target_url,
-                industry=target_industry,
-                num_topics=self.settings.max_topics_per_research
-            )
+                # Step 1: Research topics
+                log.info(f"Researching topics for {target_industry} industry")
+                log.info(f"Source URL: {target_url}")
 
-            if not topics:
-                log.warning("No topics generated from research")
-                return
+                topics = self.research_agent.research_topics(
+                    url=target_url,
+                    industry=target_industry,
+                    num_topics=self.settings.max_topics_per_research
+                )
 
-            log.info(f"Research completed. Generated {len(topics)} topics")
+                if not topics:
+                    log.warning("No topics generated from research")
+                    return
 
-            # Step 2: Create Trello cards for each topic
-            log.info("Creating Trello cards for approval")
+                log.info(f"Research completed. Generated {len(topics)} topics")
 
-            for topic in topics:
-                if not self.research_agent.validate_topic(topic):
-                    log.warning(f"Skipping invalid topic: {topic.get('title', 'Unknown')}")
-                    continue
+                # Step 2: Create Trello cards for each topic
+                log.info("Creating Trello cards for approval")
 
-                try:
-                    card_id = self.trello.create_topic_card(
-                        topic=topic['title'],
-                        outline=topic['outline'],
-                        metadata=topic['metadata']
-                    )
+                for topic in topics:
+                    if not self.research_agent.validate_topic(topic):
+                        log.warning(f"Skipping invalid topic: {topic.get('title', 'Unknown')}")
+                        continue
 
-                    log.info(f"✓ Created card for topic: {topic['title']}")
+                    try:
+                        card_id = self.trello.create_topic_card(
+                            topic=topic['title'],
+                            outline=topic['outline'],
+                            metadata=topic['metadata']
+                        )
 
-                except Exception as e:
-                    log.error(f"Failed to create card for topic '{topic['title']}': {str(e)}")
+                        log.info(f"✓ Created card for topic: {topic['title']}")
 
-            log.info("=" * 70)
-            log.info("DAILY RESEARCH WORKFLOW COMPLETED")
-            log.info(f"Created {len(topics)} topic cards for approval")
-            log.info("=" * 70)
+                    except Exception as e:
+                        log.error(f"Failed to create card for topic '{topic['title']}': {str(e)}")
 
-        except Exception as e:
-            log.error(f"Daily research workflow failed: {str(e)}")
+                log.info("=" * 70)
+                log.info("DAILY RESEARCH WORKFLOW COMPLETED")
+                log.info(f"Created {len(topics)} topic cards for approval")
+                log.info("=" * 70)
+
+            except Exception as e:
+                log.error(f"Daily research workflow failed: {str(e)}")
 
     def process_approved_topics(self):
         """
@@ -104,69 +119,95 @@ class ContentOrchestrator:
         log.info("PROCESSING APPROVED TOPICS")
         log.info("=" * 70)
 
-        try:
-            # Step 1: Get approved topics (with polling)
-            approved_topics = self._wait_for_approval(
-                self.trello.get_approved_topics,
-                "Approved Topics"
-            )
+        with self.tracer.start_as_current_span("process_approved_topics") as span:
+            try:
+                # Check for anomaly halt
+                if api_monitor.should_halt():
+                    log.error("🛑 HALT: Anomaly detected. Content generation aborted.")
+                    return
 
-            if not approved_topics:
-                log.info("No approved topics found after waiting. Skipping to next stage.")
-                return
+                # Step 1: Get approved topics (with polling)
+                approved_topics = self._wait_for_approval(
+                    self.trello.get_approved_topics,
+                    "Approved Topics"
+                )
 
-            log.info(f"Found {len(approved_topics)} approved topics")
+                if not approved_topics:
+                    log.info("No approved topics found after waiting. Skipping to next stage.")
+                    return
 
-            # Step 2: Generate content for each topic
-            for topic in approved_topics:
-                try:
-                    log.info(f"Generating content for: {topic['title']}")
+                log.info(f"Found {len(approved_topics)} approved topics")
 
-                    # Parse topic data from Trello card
-                    topic_data = self._parse_trello_topic(topic)
+                # Step 2: Generate content for each topic
+                for topic in approved_topics:
+                    try:
+                        log.info(f"Generating content for: {topic['title']}")
 
-                    # Generate content
-                    content_result = self.content_agent.generate_content(topic_data)
+                        # Parse topic data from Trello card
+                        topic_data = self._parse_trello_topic(topic)
 
-                    if not content_result:
-                        log.warning(f"Failed to generate content for: {topic['title']}")
+                        # Generate content
+                        content_result = self.content_agent.generate_content(topic_data)
+
+                        if not content_result:
+                            log.warning(f"Failed to generate content for: {topic['title']}")
+                            self.trello.add_comment(
+                                topic['id'],
+                                "⚠️ Content generation failed. Please review and try again."
+                            )
+                            continue
+
+                        # Preview content
+                        preview = self.content_agent.format_preview(content_result)
+                        log.info(f"\n{preview}\n")
+
+                        # Generate creative if enabled
+                        creative_info = None
+                        if self.settings.generate_creatives:
+                            brand_file = self.settings.brand_guidelines_file
+                            if brand_file:
+                                # If path is relative, make it absolute or check local dir
+                                if not os.path.isabs(brand_file):
+                                    brand_file = os.path.join(os.getcwd(), brand_file)
+                                
+                                if os.path.exists(brand_file):
+                                    creative_info = self.creative_agent.generate_creative(
+                                        post_content=content_result['content'],
+                                        brand_file=brand_file
+                                    )
+                                else:
+                                    log.warning(f"Brand guideline file not found: {brand_file}")
+                            else:
+                                log.warning("Creative generation enabled but no brand_guidelines_file specified")
+
+                        # Create content approval card
+                        content_card_id = self.trello.create_content_card(
+                            topic=content_result['topic'],
+                            content=content_result['content'],
+                            metadata=content_result['metadata'],
+                            creative_info=creative_info
+                        )
+
+                        log.info(f"✓ Created content card for: {topic['title']}")
+
+                        # Add comment to original topic card
                         self.trello.add_comment(
                             topic['id'],
-                            "⚠️ Content generation failed. Please review and try again."
+                            f"✓ Content generated and sent for approval. Card ID: {content_card_id}"
                         )
-                        continue
 
-                    # Preview content
-                    preview = self.content_agent.format_preview(content_result)
-                    log.info(f"\n{preview}\n")
+                        # Archive the original topic card (Stage 2 is done)
+                        self.trello.archive_card(topic['id'])
 
-                    # Create content approval card
-                    content_card_id = self.trello.create_content_card(
-                        topic=content_result['topic'],
-                        content=content_result['content'],
-                        metadata=content_result['metadata']
-                    )
+                    except Exception as e:
+                        log.error(f"Failed to process topic '{topic['title']}': {str(e)}")
 
-                    log.info(f"✓ Created content card for: {topic['title']}")
+                log.info("=" * 70)
+                log.info("APPROVED TOPICS PROCESSING COMPLETED")
+                log.info("=" * 70)
 
-                    # Add comment to original topic card
-                    self.trello.add_comment(
-                        topic['id'],
-                        f"✓ Content generated and sent for approval. Card ID: {content_card_id}"
-                    )
-
-                    # Archive the original topic card (Stage 2 is done)
-                    self.trello.archive_card(topic['id'])
-
-                except Exception as e:
-                    log.error(f"Failed to process topic '{topic['title']}': {str(e)}")
-
-            log.info("=" * 70)
-            log.info("APPROVED TOPICS PROCESSING COMPLETED")
-            log.info("=" * 70)
-
-        except Exception as e:
-            log.error(f"Failed to process approved topics: {str(e)}")
+            except Exception as e:
+                log.error(f"Failed to process approved topics: {str(e)}")
 
     def publish_approved_content(self):
         """
@@ -181,96 +222,115 @@ class ContentOrchestrator:
         log.info("PUBLISHING APPROVED CONTENT")
         log.info("=" * 70)
 
-        try:
-            # Step 1: Get approved content (with polling)
-            approved_content = self._wait_for_approval(
-                self.trello.get_approved_content,
-                "Approved Content"
-            )
+        with self.tracer.start_as_current_span("publish_approved_content") as span:
+            try:
+                # Check for anomaly halt
+                if api_monitor.should_halt():
+                    log.error("🛑 HALT: Bot-suspicion anomaly detected. Publishing aborted.")
+                    return
 
-            if not approved_content:
-                log.info("No approved content found after waiting.")
-                return
+                # Step 1: Get approved content (with polling)
+                approved_content = self._wait_for_approval(
+                    self.trello.get_approved_content,
+                    "Approved Content"
+                )
 
-            log.info(f"Found {len(approved_content)} approved content items")
+                if not approved_content:
+                    log.info("No approved content found after waiting.")
+                    return
 
-            # Step 2: Post each to LinkedIn
-            for content_item in approved_content:
-                try:
-                    # Check if scheduled for future
-                    due_date = content_item.get('due_date')
-                    if due_date:
-                        # Parse string if necessary
-                        if isinstance(due_date, str):
-                            from dateutil import parser
-                            due_date = parser.parse(due_date)
-                        
-                        # Ensure we compare in the same timezone (Trello uses UTC)
-                        now_tz = datetime.now(due_date.tzinfo) if due_date.tzinfo else datetime.now()
-                        if due_date > now_tz:
-                            log.info(f"Skipping '{content_item['title']}' - scheduled for {due_date.strftime('%Y-%m-%d %H:%M')}")
+                log.info(f"Found {len(approved_content)} approved content items")
+
+                # Step 2: Post each to LinkedIn
+                for content_item in approved_content:
+                    try:
+                        # Check if scheduled for future
+                        due_date = content_item.get('due_date')
+                        if due_date:
+                            # Parse string if necessary
+                            if isinstance(due_date, str):
+                                from dateutil import parser
+                                due_date = parser.parse(due_date)
+                            
+                            # Ensure we compare in the same timezone (Trello uses UTC)
+                            now_tz = datetime.now(due_date.tzinfo) if due_date.tzinfo else datetime.now()
+                            if due_date > now_tz:
+                                log.info(f"Skipping '{content_item['title']}' - scheduled for {due_date.strftime('%Y-%m-%d %H:%M')}")
+                                continue
+
+                        # Grace period (60 seconds)
+                        log.info(f"⏳ Grace Period: Posting '{content_item['title']}' in 60 seconds...")
+                        log.info("   (Move the card out of 'Approved Content' to cancel)")
+                        time.sleep(60)
+
+                        # RE-VERIFY: Check if the card is still in the 'Approved Content' list
+                        # Get fresh list of approved content
+                        current_approved = self.trello.get_approved_content()
+                        is_still_approved = any(item['id'] == content_item['id'] for item in current_approved)
+
+                        if not is_still_approved:
+                            log.info(f"🚫 Posting cancelled for '{content_item['title']}' (card was moved/removed)")
                             continue
 
-                    # Grace period (60 seconds)
-                    log.info(f"⏳ Grace Period: Posting '{content_item['title']}' in 60 seconds...")
-                    log.info("   (Move the card out of 'Approved Content' to cancel)")
-                    time.sleep(60)
+                        log.info(f"🚀 Grace period over. Publishing: {content_item['title']}")
 
-                    # RE-VERIFY: Check if the card is still in the 'Approved Content' list
-                    # Get fresh list of approved content
-                    current_approved = self.trello.get_approved_content()
-                    is_still_approved = any(item['id'] == content_item['id'] for item in current_approved)
+                        # Preview before posting
+                        preview = self.linkedin.preview_post(
+                            content=content_item['content']
+                        )
+                        log.info(f"\n{preview}\n")
 
-                    if not is_still_approved:
-                        log.info(f"🚫 Posting cancelled for '{content_item['title']}' (card was moved/removed)")
-                        continue
-
-                    log.info(f"🚀 Grace period over. Publishing: {content_item['title']}")
-
-                    # Preview before posting
-                    preview = self.linkedin.preview_post(
-                        content=content_item['content']
-                    )
-                    log.info(f"\n{preview}\n")
-
-                    # Post to LinkedIn
-                    result = self.linkedin.post_content(
-                        content=content_item['content']
-                    )
-
-                    if result['success']:
-                        log.info(f"✓ Successfully posted to LinkedIn. Post ID: {result['post_id']}")
-
-                        # Add comment to Trello card
-                        self.trello.add_comment(
-                            content_item['id'],
-                            f"✓ Published to LinkedIn\nPost ID: {result['post_id']}\nPublished at: {datetime.now().isoformat()}"
+                        # Post to LinkedIn
+                        result = self.linkedin.post_content(
+                            content=content_item['content']
                         )
 
-                        # Move the card to List 5 (Content Archive)
-                        self.trello.move_card(content_item['id'], self.settings.trello_archive_list_id)
+                        if result['success']:
+                            log.info(f"✓ Successfully posted to LinkedIn. Post ID: {result['post_id']}")
 
-                    else:
-                        log.error(f"Failed to post to LinkedIn: {result.get('error', 'Unknown error')}")
+                            # Add comment to Trello card
+                            self.trello.add_comment(
+                                content_item['id'],
+                                f"✓ Published to LinkedIn\nPost ID: {result['post_id']}\nPublished at: {datetime.now().isoformat()}"
+                            )
 
-                        # Add error comment to Trello
+                            # Move the card to List 5 (Content Archive)
+                            self.trello.move_card(content_item['id'], self.settings.trello_archive_list_id)
+
+                        else:
+                            log.error(f"Failed to post to LinkedIn: {result.get('error', 'Unknown error')}")
+                            
+                            # Handle quota exceeded specially for UX
+                            if result.get('error') == "quota_exceeded":
+                                self.trello.add_comment(
+                                    content_item['id'],
+                                    "⏹️ Daily post quota (5) reached. This post will be attempted tomorrow."
+                                )
+                                break # Stop the loop for today
+
+                            # Add error comment to Trello
+                            self.trello.add_comment(
+                                content_item['id'],
+                                f"⚠️ Failed to publish to LinkedIn\nError: {result.get('error', 'Unknown error')}"
+                            )
+
+                    except LinkedInBotSuspicionError as e:
+                        log.warning(f"🛡️ LUMINOL HALT TRIGGERED: {str(e)}")
                         self.trello.add_comment(
                             content_item['id'],
-                            f"⚠️ Failed to publish to LinkedIn\nError: {result.get('error', 'Unknown error')}"
+                            f"⚠️ Publishing paused - LinkedIn bot-suspicion signal detected.\nReason: {str(e)}"
                         )
+                        break # Stop the loop for today
 
-                    # Rate limiting - wait between posts
-                    time.sleep(5)
+                    except Exception as e:
+                        log.error(f"Failed to publish content '{content_item['title']}': {str(e)}")
 
-                except Exception as e:
-                    log.error(f"Failed to publish content '{content_item['title']}': {str(e)}")
+                log.info("=" * 70)
+                log.info("CONTENT PUBLISHING COMPLETED")
+                log.info("=" * 70)
 
-            log.info("=" * 70)
-            log.info("CONTENT PUBLISHING COMPLETED")
-            log.info("=" * 70)
-
-        except Exception as e:
-            log.error(f"Failed to publish approved content: {str(e)}")
+            except Exception as e:
+                log.error(f"Failed to publish approved content: {str(e)}")
 
     def run_full_workflow(self, url: Optional[str] = None, industry: Optional[str] = None):
         """

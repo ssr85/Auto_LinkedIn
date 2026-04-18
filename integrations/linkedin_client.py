@@ -4,6 +4,8 @@ from typing import Dict, Optional, cast, Any, TYPE_CHECKING
 import requests
 from utils.logger import log
 from config import settings as default_settings
+from integrations.governors.iris_limiter import iris_guarded_post
+from integrations.governors.luminol_monitor import api_monitor, LinkedInBotSuspicionError
 
 if TYPE_CHECKING:
     from config import Settings
@@ -40,6 +42,14 @@ class LinkedInManager:
         """Make an API request and refresh token if needed."""
         try:
             response = requests.request(method, url, headers=self.headers, **kwargs)
+            
+            # --- GOVERNOR: 429 Tracking ---
+            if response.status_code == 429:
+                log.warning(f"⚠️ Received 429 Rate Limit from LinkedIn: {url}")
+                api_monitor.record_429(source="linkedin")
+                if api_monitor.should_halt():
+                    raise LinkedInBotSuspicionError("LUMINOL: Significant 429 anomaly detected. Halting for safety.")
+            
             if response.status_code == 401:
                 log.info("Access token expired. Attempting to refresh...")
                 if self.refresh_token:
@@ -86,6 +96,7 @@ class LinkedInManager:
             log.error(f"Error during token refresh: {str(e)}")
             return False
 
+    @iris_guarded_post
     def post_content(self, content: str, metadata: Optional[Dict] = None) -> Dict:
         """
         Post content to LinkedIn.

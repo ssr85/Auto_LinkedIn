@@ -25,6 +25,7 @@ from scheduler import WorkflowScheduler
 from client_manager import ClientManager
 from multi_client_runner import MultiClientRunner
 from utils.logger import log
+from utils.telemetry import init_tracing
 from config import settings
 
 
@@ -208,6 +209,9 @@ def cmd_clients(sub: str):
 
 def main():
     """Main CLI entry point."""
+    # Initialize OpenTelemetry tracing (Console output)
+    init_tracing()
+    
     parser = argparse.ArgumentParser(
         description="LinkedIn Content Automation System",
         formatter_class=argparse.RawDescriptionHelpFormatter,

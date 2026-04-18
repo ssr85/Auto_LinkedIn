@@ -1,0 +1,9 @@
+# iris_config.yaml
+# Quota plans for LinkedIn outreach safety
+
+plans:
+  linkedin_post_daily:
+    quota: 5          # Hard limit of 5 posts per 24h as per user decision
+    window: 24h
+    strategy: hard_limit
+    priority: 1

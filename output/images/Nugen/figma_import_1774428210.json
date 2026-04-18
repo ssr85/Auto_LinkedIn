@@ -1,0 +1,19 @@
+{
+  "layers": [
+    {
+      "type": "RECTANGLE",
+      "name": "Nugen Creative",
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 1080,
+      "fills": [
+        {
+          "type": "IMAGE",
+          "scaleMode": "FILL",
+          "image_url": "http://localhost:8080/Nugen/creative_1774428210.png"
+        }
+      ]
+    }
+  ]
+}

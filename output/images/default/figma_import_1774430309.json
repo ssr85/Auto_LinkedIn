@@ -1,0 +1,39 @@
+{
+  "layers": [
+    {
+      "type": "RECTANGLE",
+      "name": "Background",
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 1080,
+      "fills": [
+        {
+          "type": "IMAGE",
+          "scaleMode": "FILL",
+          "image_url": "http://localhost:8080/default/creative_1774430309.png"
+        }
+      ]
+    },
+    {
+      "type": "TEXT",
+      "name": "Headline",
+      "characters": "Antigravity AI",
+      "x": 50,
+      "y": 850,
+      "width": 980,
+      "fontSize": 64,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      ],
+      "textAlignHorizontal": "LEFT"
+    }
+  ]
+}

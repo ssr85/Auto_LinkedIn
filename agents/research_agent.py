@@ -39,7 +39,7 @@ class ResearchAgent:
             social media engagement, and thought leadership. You excel at identifying topics that
             resonate with professionals and creating detailed outlines that guide compelling content creation.""",
             tools=[self.search_tool, self.scrape_tool],
-            llm=self.llm,
+            llm=self.settings.ai_model,
             verbose=True,
             allow_delegation=False
         )

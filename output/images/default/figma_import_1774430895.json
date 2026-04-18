@@ -1,0 +1,157 @@
+{
+  "layers": [
+    {
+      "type": "RECTANGLE",
+      "name": "Background",
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 1080,
+      "opacity": 1.0,
+      "visible": true,
+      "fills": [
+        {
+          "type": "IMAGE",
+          "scaleMode": "FILL",
+          "image_url": "http://localhost:8080/default/creative_1774430895.png"
+        }
+      ]
+    },
+    {
+      "type": "RECTANGLE",
+      "name": "Glass Overlay",
+      "x": 40,
+      "y": 780,
+      "width": 1000,
+      "height": 240,
+      "opacity": 0.1,
+      "visible": true,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      ]
+    },
+    {
+      "type": "TEXT",
+      "name": "Headline",
+      "x": 60,
+      "y": 800,
+      "width": 960,
+      "height": 100,
+      "opacity": 1.0,
+      "visible": true,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      ],
+      "characters": "AI-Powered LinkedIn Automation",
+      "fontSize": 72,
+      "textAlignHorizontal": "LEFT",
+      "textAlignVertical": "TOP"
+    },
+    {
+      "type": "TEXT",
+      "name": "Subheadline",
+      "x": 60,
+      "y": 890,
+      "width": 960,
+      "height": 100,
+      "opacity": 1.0,
+      "visible": true,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      ],
+      "characters": "Qwen2.5-Coder enables editable Figma layers for total design flexibility.",
+      "fontSize": 32,
+      "textAlignHorizontal": "LEFT",
+      "textAlignVertical": "TOP"
+    },
+    {
+      "type": "TEXT",
+      "name": "Hashtags",
+      "x": 60,
+      "y": 970,
+      "width": 960,
+      "height": 100,
+      "opacity": 1.0,
+      "visible": true,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      ],
+      "characters": "#AI #Automation #LinkedIn #Figma #Design",
+      "fontSize": 28,
+      "textAlignHorizontal": "LEFT",
+      "textAlignVertical": "TOP"
+    },
+    {
+      "type": "RECTANGLE",
+      "name": "Brand Logo Area",
+      "x": 60,
+      "y": 60,
+      "width": 200,
+      "height": 80,
+      "opacity": 0.9,
+      "visible": true,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          }
+        }
+      ]
+    },
+    {
+      "type": "TEXT",
+      "name": "Brand Name",
+      "x": 70,
+      "y": 100,
+      "width": 180,
+      "height": 100,
+      "opacity": 1.0,
+      "visible": true,
+      "fills": [
+        {
+          "type": "SOLID",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      ],
+      "characters": "Antigravity AI",
+      "fontSize": 24,
+      "textAlignHorizontal": "LEFT",
+      "textAlignVertical": "TOP"
+    }
+  ]
+}

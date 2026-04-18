@@ -20,6 +20,7 @@ apscheduler>=3.10.4
 
 # Environment and Configuration
 python-dotenv>=1.0.0
+huggingface_hub
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 
@@ -28,3 +29,14 @@ python-dateutil>=2.8.2
 pytz>=2024.1
 rich>=13.7.0
 loguru>=0.7.2
+Pillow>=10.0.0
+
+# LinkedIn OSS Safety Governors (Iris & Luminol)
+# luminol provides anomaly detection; iris provides local rate-limiting governor
+luminol>=0.4
+phonenumbers
+
+# Observability (OpenTelemetry)
+opentelemetry-api>=1.22.0
+opentelemetry-sdk>=1.22.0
+opentelemetry-instrumentation-requests>=0.43b0

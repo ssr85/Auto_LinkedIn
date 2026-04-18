@@ -1,0 +1,14 @@
+{
+  "name": "V5 Advisory Center",
+  "palette": {
+    "primary": ["#1E2A5A", "#E8322B"],
+    "secondary": ["#F4F5F7", "#EAF0F8", "#FFFFFF"]
+  },
+  "typography": {
+    "heading": "Fraunces Bold",
+    "body": "Lora Regular",
+    "ui": "Inter"
+  },
+  "visual_style": "Corporate advisory, professional, trustworthy, financial services, clean layout, navy blue and brand red accents, minimalist and sophisticated.",
+  "keywords": ["advisory", "finance", "strategy", "trust", "corporate", "navy", "professional"]
+}

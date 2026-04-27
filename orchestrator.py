@@ -138,8 +138,8 @@ class ContentOrchestrator:
 
                 log.info(f"Found {len(approved_topics)} approved topics")
 
-                # Step 2: Generate content for each topic
-                for topic in approved_topics:
+                # Step 2: Generate content for each topic (limited by settings)
+                for topic in approved_topics[:self.settings.max_topics_per_research]:
                     try:
                         log.info(f"Generating content for: {topic['title']}")
 
@@ -241,8 +241,8 @@ class ContentOrchestrator:
 
                 log.info(f"Found {len(approved_content)} approved content items")
 
-                # Step 2: Post each to LinkedIn
-                for content_item in approved_content:
+                # Step 2: Post each to LinkedIn (limited by settings)
+                for content_item in approved_content[:self.settings.max_topics_per_research]:
                     try:
                         # Check if scheduled for future
                         due_date = content_item.get('due_date')

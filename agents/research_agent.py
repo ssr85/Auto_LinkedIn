@@ -2,8 +2,8 @@
 
 from crewai import Agent, Task, Crew
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
-from langchain_openai import ChatOpenAI
 from typing import List, Dict, Optional, TYPE_CHECKING
+from utils.llm_factory import get_llm
 from datetime import datetime
 from utils.logger import log
 from config import settings as default_settings
@@ -22,8 +22,11 @@ class ResearchAgent:
             settings: Settings instance to use. Defaults to global settings.
         """
         self.settings = settings or default_settings
-        self.llm = ChatOpenAI(
-            model=self.settings.ai_model,
+        # Use specific research model if set, otherwise fallback to global AI model
+        model = self.settings.research_model or self.settings.ai_model
+        
+        self.llm = get_llm(
+            model_name=model,
             temperature=0.7
         )
 
@@ -39,7 +42,7 @@ class ResearchAgent:
             social media engagement, and thought leadership. You excel at identifying topics that
             resonate with professionals and creating detailed outlines that guide compelling content creation.""",
             tools=[self.search_tool, self.scrape_tool],
-            llm=self.settings.ai_model,
+            llm=self.llm,
             verbose=True,
             allow_delegation=False
         )

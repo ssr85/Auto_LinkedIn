@@ -17,9 +17,15 @@ class Settings(BaseSettings):
     client_name: Optional[str] = None
 
     # API Keys
-    openai_api_key: str
+    openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
     serper_api_key: Optional[str] = None
+
+    # Provider Enable/Disable Flags
+    use_openai: bool = False
+    use_anthropic: bool = False
+    use_openrouter: bool = True
 
     # Trello Configuration
     trello_api_key: str
@@ -44,7 +50,8 @@ class Settings(BaseSettings):
     research_frequency_hours: int = 24
 
     # AI Model Configuration
-    ai_model: str = "gpt-4-turbo-preview"
+    ai_model: str = "gpt-4o"
+    research_model: Optional[str] = None
 
     # Image Generation (Hugging Face)
     huggingface_api_token: Optional[str] = None
@@ -76,11 +83,16 @@ settings = Settings()
 
 # Propagate to environment for compatibility with LangChain/OpenAI/CrewAI
 import os
-os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+if settings.use_openai and settings.openai_api_key:
+    os.environ["OPENAI_API_KEY"] = settings.openai_api_key
 if settings.serper_api_key:
     os.environ["SERPER_API_KEY"] = settings.serper_api_key
 if settings.huggingface_api_token:
     os.environ["HUGGINGFACE_API_TOKEN"] = settings.huggingface_api_token
+if settings.use_anthropic and settings.anthropic_api_key:
+    os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+if settings.use_openrouter and settings.openrouter_api_key:
+    os.environ["OPENROUTER_API_KEY"] = settings.openrouter_api_key
 
 
 def load_client_settings(env_file: str, client_name: str) -> "Settings":

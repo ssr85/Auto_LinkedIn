@@ -3,8 +3,8 @@ import json
 import requests
 import time
 from typing import Dict, Optional
-from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from utils.llm_factory import get_llm
+from langchain_core.prompts import PromptTemplate
 from huggingface_hub import InferenceClient
 from integrations.figma_client import FigmaManager
 from utils.logger import log
@@ -30,10 +30,9 @@ class CreativeAgent:
             )
         
         # 3. LLM for Visual Concept Extraction
-        self.visual_llm = ChatOpenAI(
-            model=self.settings.ai_model,
-            temperature=0.7,
-            api_key=self.settings.openai_api_key
+        self.visual_llm = get_llm(
+            model_name=self.settings.ai_model,
+            temperature=0.7
         )
 
         # 4. LLM for Layout Generation (Structured Design)
@@ -259,8 +258,10 @@ class CreativeAgent:
                 content=content[:1000], 
                 brand_style=brand.get("visual_style", "Modern")
             )
-            response = self.visual_llm.invoke(full_prompt)
-            return response.content.strip()
+            # Use .call() for CrewAI LLM instances
+            response = self.visual_llm.call(full_prompt)
+            # CrewAI LLM.call() usually returns a string directly
+            return str(response).strip()
         except Exception as e:
             log.warning(f"Failed to extract visual concept: {str(e)}. Falling back to content slice.")
             return content[:200]

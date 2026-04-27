@@ -138,7 +138,7 @@ MAX_TOPICS_PER_RESEARCH=5           # Topics per day
 RESEARCH_FREQUENCY_HOURS=24         # How often to research
 
 # AI Model
-AI_MODEL=gpt-4-turbo-preview        # OpenAI model
+AI_MODEL=gpt-4o        # OpenAI model
 # or
 AI_MODEL=gpt-3.5-turbo             # Cheaper option
 ```

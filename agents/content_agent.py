@@ -1,8 +1,8 @@
 """Content generation agent for creating LinkedIn posts."""
 
 from crewai import Agent, Task, Crew
-from langchain_openai import ChatOpenAI
 from typing import Dict, Optional, TYPE_CHECKING
+from utils.llm_factory import get_llm
 from datetime import datetime
 from utils.logger import log
 from config import settings as default_settings
@@ -22,8 +22,8 @@ class ContentAgent:
             settings: Settings instance to use. Defaults to global settings.
         """
         self.settings = settings or default_settings
-        self.llm = ChatOpenAI(
-            model=self.settings.ai_model,
+        self.llm = get_llm(
+            model_name=self.settings.ai_model,
             temperature=0.7
         )
 
@@ -36,7 +36,7 @@ class ContentAgent:
             platform, including optimal post length, tone, formatting, and engagement tactics.
             Your posts consistently generate high engagement through compelling storytelling,
             actionable insights, and authentic voice.""",
-            llm=self.settings.ai_model,
+            llm=self.llm,
             verbose=True,
             allow_delegation=False
         )

@@ -159,7 +159,7 @@ Edit your `.env` file:
 ```env
 # OpenAI
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
-AI_MODEL=gpt-4-turbo-preview
+AI_MODEL=gpt-4o
 
 # Trello
 TRELLO_API_KEY=your_32_char_api_key

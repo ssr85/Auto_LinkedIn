@@ -20,6 +20,17 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+# --- Pydantic v2 Late-Binding Fix ---
+# This resolves: ChatOpenAI is not fully defined; you should define BaseCache, then call ChatOpenAI.model_rebuild()
+try:
+    from langchain_openai import ChatOpenAI
+    from langchain_core.caches import BaseCache
+    from langchain_core.callbacks import Callbacks
+    ChatOpenAI.model_rebuild()
+except ImportError:
+    pass
+# ------------------------------------
+
 from orchestrator import ContentOrchestrator
 from scheduler import WorkflowScheduler
 from client_manager import ClientManager
